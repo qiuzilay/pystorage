@@ -1,0 +1,280 @@
+{
+    "%": {
+        "value": "\u0025",
+        "row": 0,
+        "column": 4,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "AC": {
+        "value": "AC",
+        "row": 0,
+        "column": 2,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "⌫": {
+        "value": "\u232B",
+        "row": 0,
+        "column": 3,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "./images/rooted.png": {
+        "value": "√",
+        "row": 0,
+        "column": 1,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "./images/reciprocal.png": {
+        "value": "\u207B",
+        "row": 1,
+        "column": 1,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "./images/powered.png": {
+        "value": "^",
+        "row": 2,
+        "column": 1,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "(": {
+        "value": "\u0028",
+        "row": 3,
+        "column": 1,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    ")": {
+        "value": "\u0029",
+        "row": 4,
+        "column": 1,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "1": {
+        "value": "1",
+        "row": 3,
+        "column": 2,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "2": {
+        "value": "2",
+        "row": 3,
+        "column": 3,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "3": {
+        "value": "3",
+        "row": 3,
+        "column": 4,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "4": {
+        "value": "4",
+        "row": 2,
+        "column": 2,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "5": {
+        "value": "5",
+        "row": 2,
+        "column": 3,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "6": {
+        "value": "6",
+        "row": 2,
+        "column": 4,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "7": {
+        "value": "7",
+        "row": 1,
+        "column": 2,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "8": {
+        "value": "8",
+        "row": 1,
+        "column": 3,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "9": {
+        "value": "9",
+        "row": 1,
+        "column": 4,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "0": {
+        "value": "0",
+        "row": 4,
+        "column": 2,
+        "colspan": 2,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    ".": {
+        "value": ".",
+        "row": 4,
+        "column": 4,
+        "bgcolor": "#FFFFFF",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "=": {
+        "value": "=",
+        "row": 4,
+        "column": 5,
+        "bgcolor": "#E19D00",
+        "fgcolor": "#FFFFFF",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Microsoft JhengHei",
+            "size": 18,
+            "weight": "normal"
+        }
+    },
+    "+": {
+        "value": "+",
+        "row": 3,
+        "column": 5,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Microsoft JhengHei",
+            "size": 18,
+            "weight": "normal"
+        }
+    },
+    "-": {
+        "value": "-",
+        "row": 2,
+        "column": 5,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Microsoft JhengHei",
+            "size": 18,
+            "weight": "normal"
+        }
+    },
+    "×": {
+        "value": "\u00D7",
+        "row": 1,
+        "column": 5,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Microsoft JhengHei",
+            "size": 18,
+            "weight": "normal"
+        }
+    },
+    "÷": {
+        "value": "\u002F",
+        "row": 0,
+        "column": 5,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Microsoft JhengHei",
+            "size": 18,
+            "weight": "normal"
+        }
+    },
+    "./images/absolute.png": {
+        "value": "ABS",
+        "row": 0,
+        "column": 0,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4"
+    },
+    "sin": {
+        "value": "sin",
+        "row": 1,
+        "column": 0,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Consolas",
+            "size": 14,
+            "weight": "normal"
+        }
+    },
+    "cos": {
+        "value": "cos",
+        "row": 2,
+        "column": 0,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Consolas",
+            "size": 14,
+            "weight": "normal"
+        }
+    },
+    "tan": {
+        "value": "tan",
+        "row": 3,
+        "column": 0,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Consolas",
+            "size": 14,
+            "weight": "normal"
+        }
+    },
+    "log": {
+        "value": "log",
+        "row": 4,
+        "column": 0,
+        "bgcolor": "#F9F9F9",
+        "fgcolor": "#000000",
+        "bgfocus": "#FCF8F4",
+        "font": {
+            "family":"Consolas",
+            "size": 14,
+            "weight": "normal"
+        }
+    }
+}
