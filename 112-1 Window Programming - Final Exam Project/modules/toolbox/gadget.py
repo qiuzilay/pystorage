@@ -3,6 +3,7 @@ from collections import namedtuple
 from inspect import isclass
 from typing import Literal
 from ctypes import windll
+from decimal import Decimal, ROUND_HALF_UP
 
 def is_number(_) -> bool:
     try: _ = float(_) # @IgnoreException
@@ -107,3 +108,19 @@ class Gadget:
                     offset_width = scaler(viewport.width - width)/2,
                     offset_height = scaler(viewport.height - width)/2
                 )
+            
+    @staticmethod
+    def round(number: str | int | float, format: str = '.00') -> str:
+        return str(Decimal(str(number)).quantize(Decimal(format), ROUND_HALF_UP))
+
+    @staticmethod
+    def timeformat(sec: int | float, type: Literal['string', 'set'] = 'string') -> str | tuple:
+        hour = int(sec//3600)
+        minute = int(sec//60) - (hour * 60)
+        second = int(sec) - (minute * 60) - (hour * 3600)
+
+        match type:
+            case 'string':
+                return f'{hour:0>2d}:{minute:0>2d}:{second:0>2d}' if hour > 0 else f'{minute:0>2d}:{second:0>2d}'
+            case 'set':
+                return namedtuple('timeformat', ('hr', 'min', 'sec'))(hr=hour, min=minute, sec=second)
