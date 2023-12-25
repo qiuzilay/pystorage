@@ -20,6 +20,7 @@ MUSIC_END = 19132
 
 class color(Enum):
     white = '#FFFFFF'
+    deepblue = '#006699'
     lightgray = '#D3D3D3'
     dimgray = '#696969'
     darkgray = '#404040'
@@ -37,8 +38,9 @@ class AudioFile:
         self.root = root
         self.root.states.serial += 1
         self.id = self.root.states.serial
-        self.selected = False
+        self.selected = tk.BooleanVar()
         self.frame = tk.Frame(parent, name=f'playlist-audio_{self.id}', bg=color.white)
+        self.frame.hover = False
 
         @dataclass
         class metadata:
@@ -64,6 +66,7 @@ class AudioFile:
         self.frame.columnconfigure(0, weight=4)
         self.frame.columnconfigure(1, weight=1)
 
+        self.selected.trace_add('write', self.event_selected)
         self.frame.bind('<Enter>', root.hover_on)
         self.frame.bind('<Leave>', root.hover_off)
         self.frame.bind('<Double-Button-1>', self.trigger)
@@ -77,55 +80,54 @@ class AudioFile:
         # 會覆蓋掉前面其他 [instance AudioFile] 的 bind_all
         # -> AudioFile1 Triggered, AudioFile3 Handle
 
-        @dataclass
-        class color_info:
-            bgcolor: object = None
-            fgcolor: object = None
-
-        @dataclass
-        class default_style:
-            frame = color_info(bgcolor=self.frame.cget('background'))
-            label = color_info(bgcolor=self.labels.name.cget('background'), fgcolor=self.labels.name.cget('foreground'))
-
-        self.default_style = default_style()
-
-
-    def trigger(self, event=...):
-        match (self.selected, bool(self.root.states.focus)):
+    def trigger(self, event=..., cause_pointer_moved=False):
+        match (self.selected.get(), bool(self.root.states.focus)):
             case (True, True):
-                self.unfocused()
+                self.selected.set(False)
                 self.root.states.focus = None
-                self.root.states.hover.bgcolor = self.default_style.frame.bgcolor
-                if self.root.states.hover.child:
-                    self.root.states.hover.child.bgcolor = self.default_style.label.bgcolor
-                    self.root.states.hover.child.fgcolor = self.default_style.label.fgcolor
             case (True, False):
                 raise Exception('An impossible situation occurred.')
             case (False, True):
-                self.root.states.focus.unfocused()
-                self.focused()
+                self.root.states.focus.selected.set(False)
+                self.selected.set(True)
                 self.root.states.focus = self
+                if cause_pointer_moved: return
+                for index, file in enumerate(self.root.queue):
+                    if id(file) == id(self):
+                        self.root.states.pointer.set(index)
+                        self.root.play_music(status='stop')
+                        break
+
             case (False, False):
-                self.focused()
+                self.selected.set(True)
                 self.root.states.focus = self
+                if cause_pointer_moved: return
+                for index, file in enumerate(self.root.queue):
+                    if id(file) == id(self):
+                        self.root.states.pointer.set(index)
+                        self.root.play_music(status='stop')
+                        break
 
-    def focused(self):
-        self.selected = True
-        self.frame.config(bg=color.darkgray)
-        self.labels.name.config(bg=color.darkgray, fg=color.white)
-        self.labels.length.config(bg=color.darkgray, fg=color.white)
-        self.root.states.hover.bgcolor = color.darkgray
-        if self.root.states.hover.child:
-            self.root.states.hover.child.bgcolor = color.darkgray
-            self.root.states.hover.child.fgcolor = color.white
-
-    def unfocused(self):
-        self.selected = False
-        self.frame.config(bg=self.default_style.frame.bgcolor)
-        self.labels.name.config(bg=self.default_style.label.bgcolor, fg=color.black)
-        self.labels.length.config(bg=self.default_style.label.bgcolor, fg=color.black)
+    def event_selected(self, *args, **kwargs):
+        match (self.selected.get(), self.frame.hover):
+            case (True, True):
+                self.frame.config(bg=color.darkgray)
+                self.labels.name.config(bg=color.darkgray, fg=color.white, font=font.bold)
+                self.labels.length.config(bg=color.darkgray, fg=color.white, font=font.bold)
+                self.root.states.hover.child.fgcolor = color.deepblue
+                self.root.states.hover.child.font = font.bold
+            case (True, False):
+                self.labels.name.config(fg=color.deepblue, font=font.bold)
+                self.labels.length.config(fg=color.deepblue, font=font.bold)
+            case (False, True):
+                self.labels.name.config(fg=color.white, font=font.default)
+                self.labels.length.config(fg=color.white, font=font.default)
+                self.root.states.hover.child.fgcolor = color.black
+                self.root.states.hover.child.font = font.default
+            case (False, False):
+                self.labels.name.config(fg=color.black, font=font.default)
+                self.labels.length.config(fg=color.black, font=font.default)
         
-
 class MusicPlayer:
 
     def __init__(self, window:tk.Tk):
@@ -155,6 +157,7 @@ class MusicPlayer:
             widget: tk.Widget = None
             fgcolor: object = None
             bgcolor: object = None
+            font: object = None
             child: hover_info = None
 
         @dataclass
@@ -305,8 +308,8 @@ class MusicPlayer:
         
         return self
 
-    def play_music(self, event=...):
-        match self.states.status:
+    def play_music(self, event=..., status:Literal['playing', 'pause', 'stop'] = ...):
+        match self.states.status if (status is Ellipsis) else status:
             case 'playing':
                 pygame.mixer.music.pause()
                 self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
@@ -319,7 +322,6 @@ class MusicPlayer:
                 if self.queue:
                     pointer = self.states.pointer.get()
                     self.states.pointer.set(0) if pointer < 0 else ...
-                    console.info('play -', self.queue[self.states.pointer.get()])
                     pygame.mixer.music.play()
                     self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_pause)
                     self.states.status = 'playing'
@@ -329,16 +331,13 @@ class MusicPlayer:
                 raise Exception('An unexpected status was detected.')
     
     def stop_music(self, event=...):
-        if pygame.mixer.music.get_busy():
-            pygame.mixer.music.stop()  # 停止播放歌曲
-            self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
-            self.states.status = 'stop'
-        else:
-            console.info('There is no playing music to stop!')
+        pygame.mixer.music.rewind()
+        pygame.mixer.music.pause()
+        self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
+        self.states.status = 'stop'
         
     def add_song(self):
-        file = filedialog.askopenfilename(filetypes=(("MP3 files", "*.mp3"), ("All files", "*.*")))  # 選擇要加入的MP3格式歌曲
-        if file:  # 如果有選擇歌曲
+        for file in filedialog.askopenfilenames(filetypes=(("MP3 files", "*.mp3"), ("All files", "*.*"))):  # 如果有選擇歌曲
             file = AudioFile(self, self.frames.playlist, path=file)
             self.queue.append(file)  # 將歌曲加入歌曲清單
             file.frame.grid(sticky=tk.NSEW)
@@ -374,6 +373,7 @@ class MusicPlayer:
         
     def hover_on(self, event=...):
         widget: tk.Canvas | tk.Frame = event.widget
+        widget.hover = True
         self.states.hover = self.states.hover(
             widget = widget,
             bgcolor = widget.cget('background'),
@@ -386,22 +386,25 @@ class MusicPlayer:
                 if not isinstance(child, tk.Label): continue
                 fg = child.cget('foreground')
                 bg = child.cget('background')
+                font = child.cget('font')
                 child.config(fg=color.white, bg=color.dimgray)
             self.states.hover.child.fgcolor = fg
             self.states.hover.child.bgcolor = bg
+            self.states.hover.child.font = font
             widget.config(bg=color.dimgray)
         else:
             widget.config(bg=color.lightgray)
 
     def hover_off(self, event=...):
         widget: tk.Canvas | tk.Frame = event.widget
-
+        widget.hover = False
         if widget.winfo_name().startswith('playlist-audio'):
             for child in widget.grid_slaves():
                 if not isinstance(child, tk.Label): continue
                 child.config(
                     fg = self.states.hover.child.fgcolor,
-                    bg = self.states.hover.child.bgcolor
+                    bg = self.states.hover.child.bgcolor,
+                    font = self.states.hover.child.font
                 )
 
         widget.config(bg=self.states.hover.bgcolor)
@@ -412,22 +415,22 @@ class MusicPlayer:
         pointer = self.states.pointer.get() - 1
         pointer = (pointer + self.queue.length) if pointer < 0 else pointer
         self.states.pointer.set(pointer)
-        self.states.status = 'stop'
-        self.play_music()
+        self.play_music(status='stop')
 
     def next_song(self, event=...):
         if self.states.pointer.get() < 0: return
         pointer = self.states.pointer.get() + 1
         pointer = (pointer - self.queue.length) if pointer >= self.queue.length else pointer
         self.states.pointer.set(pointer)
-        self.states.status = 'stop'
-        self.play_music()
+        self.play_music(status='stop')
 
     def pointer_moved(self, *args, **kwargs):
         file: AudioFile = self.queue[self.states.pointer.get()]
-        file.trigger()
+        file.trigger(cause_pointer_moved=True) if id(self.states.focus) != id(file) else ...
         pygame.mixer.music.unload()
+        console.info(f'unload!')
         pygame.mixer.music.load(file.data.path)
+        console.info(f'loaded {file.data.name}')
         pygame.mixer.music.set_endevent(MUSIC_END)
 
     def song_endevent(self):
@@ -438,8 +441,7 @@ class MusicPlayer:
                 if (pointer + 1) < self.queue.length:
                     self.next_song()
                 else:
-                    file: AudioFile = self.queue[pointer]
-                    file.unfocused()
+                    self.queue[pointer].selected.set(False)
                     self.states.status = 'stop'
                     self.states.pointer.set(0)
                     self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
