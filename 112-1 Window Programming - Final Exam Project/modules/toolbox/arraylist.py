@@ -1,11 +1,11 @@
 from __future__ import annotations
 from inspect import signature, isfunction
-from typing import Iterable, Callable, NewType, Literal, Self
+from typing import Iterable, Sequence, Callable, NewType, Literal, Self
 
 class Numeric: ...
 Numeric = NewType('Numeric', [int, float])
 
-class array:
+class array(Sequence):
     
     def __init__(self, *values):
         

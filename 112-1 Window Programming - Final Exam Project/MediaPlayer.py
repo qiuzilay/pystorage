@@ -6,10 +6,11 @@ chdir(dirname(realpath(__file__))) if not getcwd().endswith(dirname(realpath(__f
 
 from modules.toolbox import Gadget, Enum, array, console
 from dataclasses import dataclass, field
-from collections import namedtuple as ntuple
+from functools import partial
 from typing import Literal
 from threading import Thread
 from time import sleep
+from random import sample
 from tkinter import ttk
 import tkinter as tk
 import tkinter.filedialog as filedialog
@@ -81,16 +82,16 @@ class AudioFile:
         # -> AudioFile1 Triggered, AudioFile3 Handle
 
     def trigger(self, event=..., cause_pointer_moved=False):
-        match (self.selected.get(), bool(self.root.states.focus)):
+        match (self.selected.get(), bool(self.root.states.selected)):
             case (True, True):
                 self.selected.set(False)
-                self.root.states.focus = None
+                self.root.states.selected = None
             case (True, False):
                 raise Exception('An impossible situation occurred.')
             case (False, True):
-                self.root.states.focus.selected.set(False)
+                self.root.states.selected.selected.set(False)
                 self.selected.set(True)
-                self.root.states.focus = self
+                self.root.states.selected = self
                 if cause_pointer_moved: return
                 for index, file in enumerate(self.root.queue):
                     if id(file) == id(self):
@@ -100,7 +101,7 @@ class AudioFile:
 
             case (False, False):
                 self.selected.set(True)
-                self.root.states.focus = self
+                self.root.states.selected = self
                 if cause_pointer_moved: return
                 for index, file in enumerate(self.root.queue):
                     if id(file) == id(self):
@@ -170,8 +171,14 @@ class MusicPlayer:
             button_prev: tk.PhotoImage = tk.PhotoImage(file='./images/button_previous 128x.png').subsample(3)
             button_next: tk.PhotoImage = tk.PhotoImage(file='./images/button_next 128x.png').subsample(3)
             button_stop: tk.PhotoImage = tk.PhotoImage(file='./images/button_stop 128x.png').subsample(4)
-            button_repeat: tk.PhotoImage = tk.PhotoImage(file='./images/button_repeat.png').subsample(4)
-            button_shuffle: tk.PhotoImage = tk.PhotoImage(file='./images/button_shuffle.png').subsample(4)
+            button_repeat: tuple[tk.PhotoImage, ...] = (
+                tk.PhotoImage(file='./images/button_repeat.png').subsample(4),
+                tk.PhotoImage(file='./images/button_repeat_glow.png').subsample(4)
+            )
+            button_shuffle: tuple[tk.PhotoImage, ...] = (
+                tk.PhotoImage(file='./images/button_shuffle.png').subsample(4),
+                tk.PhotoImage(file='./images/button_shuffle_glow.png').subsample(4)
+            )
             button_volume: tuple[tk.PhotoImage, ...] = (
                 tk.PhotoImage(file='./images/volume_0.png').subsample(4),
                 tk.PhotoImage(file='./images/volume_1.png').subsample(4),
@@ -183,10 +190,13 @@ class MusicPlayer:
             status: Literal['playing', 'pause', 'stop'] = 'stop'
             serial: int = 0
             diff: float = 0
-            isdragging: bool = False
-            focus: AudioFile = None
+            selected: AudioFile = None
             hover: hover_info = None
             hover_prototype: hover_info = hover_info
+            isdragging: bool = False
+            repeat: bool = False
+            random: bool = False
+            
             pointer: tk.IntVar = field(default_factory=tk.IntVar)
             volume: tk.IntVar = field(default_factory=tk.IntVar)
             progress_pct: tk.DoubleVar = field(default_factory=tk.DoubleVar)
@@ -298,8 +308,8 @@ class MusicPlayer:
             button_stop = self.units.button_stop.create_image(self.units.button_stop.winfo_width()/2, self.units.button_stop.winfo_height()/2, image=self.images.button_stop),
             button_prev = self.units.button_prev.create_image(self.units.button_prev.winfo_width()/2, self.units.button_prev.winfo_height()/2, image=self.images.button_prev),
             button_next = self.units.button_next.create_image(self.units.button_next.winfo_width()/2, self.units.button_next.winfo_height()/2, image=self.images.button_next),
-            button_shuffle = self.units.button_shuffle.create_image(self.units.button_shuffle.winfo_width()/2, self.units.button_shuffle.winfo_height()/2, image=self.images.button_shuffle),
-            button_repeat = self.units.button_repeat.create_image(self.units.button_repeat.winfo_width()/2, self.units.button_repeat.winfo_height()/2, image=self.images.button_repeat),
+            button_shuffle = self.units.button_shuffle.create_image(self.units.button_shuffle.winfo_width()/2, self.units.button_shuffle.winfo_height()/2, image=self.images.button_shuffle[0]),
+            button_repeat = self.units.button_repeat.create_image(self.units.button_repeat.winfo_width()/2, self.units.button_repeat.winfo_height()/2, image=self.images.button_repeat[0]),
             button_volume = self.units.button_volume.create_image(self.units.button_volume.winfo_width()/2, self.units.button_volume.winfo_height()/2, image=self.images.button_volume[2])
         )
         
@@ -311,7 +321,9 @@ class MusicPlayer:
         self.units.button_stop.bind('<Button-1>', self.stop_music)
         self.units.button_prev.bind('<Button-1>', self.prev_song)
         self.units.button_next.bind('<Button-1>', self.next_song)
-        self.units.optbar_progress.bind('<Button-1>', self.progbar_dragged)
+        self.units.button_repeat.bind('<Button-1>', partial(self.toggle_states, attribute='repeat'))
+        self.units.button_shuffle.bind('<Button-1>', partial(self.toggle_states, attribute='random'))
+        self.units.optbar_progress.bind('<Button-1>', partial(self.toggle_states, attribute='isdragging'))
         self.units.optbar_progress.bind('<ButtonRelease-1>', self.progbar_moved)
         self.units.button_play.bind('<Enter>', self.hover_on)
         self.units.button_stop.bind('<Enter>', self.hover_on)
@@ -434,23 +446,51 @@ class MusicPlayer:
             self.states.hover = None
         except AttributeError: ...
 
+    # pointer
+
     def prev_song(self, event=...):
-        if self.states.pointer.get() < 0: return
-        pointer = self.states.pointer.get() - 1
-        pointer = (pointer + self.queue.length) if pointer < 0 else pointer
-        self.states.pointer.set(pointer)
+        pointer = self.states.pointer.get()
+        if pointer < 0: return
+        if self.states.repeat:
+            self.states.pointer.set(pointer)
+        elif self.states.random:
+            self.states.pointer.set(
+                *sample(
+                    array(range(self.queue.length)).filter(lambda _: _.__ne__(pointer)),
+                    k = 1
+                )
+            )
+        else:
+            pointer -= 1
+            pointer = (pointer + self.queue.length) if pointer < 0 else pointer
+            self.states.pointer.set(pointer)
+            
         self.play_music(status='stop')
 
     def next_song(self, event=...):
-        if self.states.pointer.get() < 0: return
-        pointer = self.states.pointer.get() + 1
-        pointer = (pointer - self.queue.length) if pointer >= self.queue.length else pointer
-        self.states.pointer.set(pointer)
+        pointer = self.states.pointer.get()
+        if pointer < 0: return
+        if self.states.repeat:
+            self.states.pointer.set(pointer)
+
+        elif self.states.random:
+            self.states.pointer.set(
+                *sample(
+                    array(range(self.queue.length)).filter(lambda _: _.__ne__(pointer)),
+                    k = 1
+                )
+            )
+
+        else:
+            pointer += 1
+            pointer = (pointer - self.queue.length) if pointer >= self.queue.length else pointer
+            self.states.pointer.set(pointer)
+
         self.play_music(status='stop')
 
     def pointer_moved(self, *args, **kwargs):
         file: AudioFile = self.queue[self.states.pointer.get()]
-        file.trigger(cause_pointer_moved=True) if id(self.states.focus) != id(file) else ...
+        file.trigger(cause_pointer_moved=True) if id(self.states.selected) != id(file) else ...
         pygame.mixer.music.unload()
         pygame.mixer.music.load(file.data.path)
         self.progbar_moved(0)
@@ -469,6 +509,8 @@ class MusicPlayer:
                 self.queue[pointer].selected.set(False)
                 self.states.pointer.set(0)
                 self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
+
+    # progess bar
 
     def progbar_sync(self, pct: float, file: AudioFile, reposition: bool = True, label_only: bool = False):
         """The parameter `pct` must be the value of percentage type
@@ -499,9 +541,6 @@ class MusicPlayer:
 
         except IndexError: ...
 
-    def progbar_dragged(self, event):
-        self.states.isdragging = True
-
     def progbar_track(self):
 
         while True:
@@ -523,7 +562,26 @@ class MusicPlayer:
                 except (IndexError, pygame.error):
                     ...
 
-class audio: ...
+    # miscellaneous
+    def toggle_states(self, event, attribute: Literal['isdragging', 'repeat', 'random']):
+        match attribute:
+            case 'isdragging':
+                self.states.isdragging = False if self.states.isdragging else True
+            case 'repeat':
+                self.states.repeat = False if self.states.repeat else True
+                self.units.button_repeat.itemconfig(
+                    tagOrId = self.cfgIDs.button_repeat,
+                    image = self.images.button_repeat[int(self.states.repeat)]
+                )
+            case 'random':
+                self.states.random = False if self.states.random else True
+                self.units.button_shuffle.itemconfig(
+                    tagOrId = self.cfgIDs.button_shuffle,
+                    image = self.images.button_shuffle[int(self.states.random)]
+                )
+            case _:
+                raise Exception('An unknown attribute was given')
 
+class audio: ...
 audio: MusicPlayer = MusicPlayer(tk.Tk())  # 創建音樂播放器物件
 audio.window.mainloop()  # 啟動視窗主迴圈，等待使用者操作
