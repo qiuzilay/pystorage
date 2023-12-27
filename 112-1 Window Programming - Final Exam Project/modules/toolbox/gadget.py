@@ -110,8 +110,8 @@ class Gadget:
                 )
             
     @staticmethod
-    def round(number: str | int | float, format: str = '.00') -> str:
-        return str(Decimal(str(number)).quantize(Decimal(format), ROUND_HALF_UP))
+    def round(number: str | int | float, format: str = '.00') -> float:
+        return float(Decimal(str(number)).quantize(Decimal(format), ROUND_HALF_UP))
 
     @staticmethod
     def timeformat(sec: int | float, type: Literal['string', 'set'] = 'string') -> str | tuple:

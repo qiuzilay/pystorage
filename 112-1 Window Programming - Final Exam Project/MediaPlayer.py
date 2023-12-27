@@ -14,9 +14,9 @@ from tkinter import ttk
 import tkinter as tk
 import tkinter.filedialog as filedialog
 import pygame  # 引入Pygame模組，用於音樂播放
-import enum
 
-MUSIC_END = 19132
+class eventID(Enum):
+    music_end = 19132
 
 class color(Enum):
     white = '#FFFFFF'
@@ -46,12 +46,12 @@ class AudioFile:
         class metadata:
             name: str
             path: str
-            length: int
+            length: float
 
         self.data = metadata(
             name = basename(path),
             path = realpath(path),
-            length = int(Gadget.round(pygame.mixer.Sound(path).get_length(), format='0'))
+            length = Gadget.round(pygame.mixer.Sound(path).get_length(), format='0')
         )
 
         @dataclass
@@ -137,6 +137,7 @@ class MusicPlayer:
             menu: tk.Menu = tk.Menu(window)
             label: tk.Frame = tk.Frame(window, bg=color.white)
             playlist: tk.Frame = tk.Frame(window, bg=color.white)
+            progress: tk.Frame = tk.Frame(window)
             basic: tk.Frame = tk.Frame(window)
             volume: tk.Frame = None # child of frames.basic
             file: tk.Menu = None # child of frams.menu
@@ -151,6 +152,8 @@ class MusicPlayer:
             button_shuffle: tk.Canvas
             button_volume: tk.Canvas
             optbar_volume: ttk.Scale
+            optbar_progress: ttk.Scale
+            label_progress: tk.Label
         
         @dataclass
         class hover_info:
@@ -179,10 +182,14 @@ class MusicPlayer:
         class states:
             status: Literal['playing', 'pause', 'stop'] = 'stop'
             serial: int = 0
-            focus: AudioFile | None = None
-            hover: hover_info = hover_info
+            diff: float = 0
+            isdragging: bool = False
+            focus: AudioFile = None
+            hover: hover_info = None
+            hover_prototype: hover_info = hover_info
             pointer: tk.IntVar = field(default_factory=tk.IntVar)
             volume: tk.IntVar = field(default_factory=tk.IntVar)
+            progress_pct: tk.DoubleVar = field(default_factory=tk.DoubleVar)
             
         btnsize = Gadget.scaler(80)
         
@@ -202,17 +209,20 @@ class MusicPlayer:
             button_repeat = tk.Canvas(self.frames.basic, width=int(btnsize*0.5), height=int(btnsize*0.5)),
             button_shuffle = tk.Canvas(self.frames.basic, width=int(btnsize*0.5), height=int(btnsize*0.5)),
             button_volume = tk.Canvas(self.frames.volume, width=int(btnsize*0.5), height=int(btnsize*0.5)),
-            optbar_volume = ttk.Scale(self.frames.volume, from_=0, to=100, variable=self.states.volume, length=int(btnsize), command=self.adjust_volume)
+            optbar_volume = ttk.Scale(self.frames.volume, from_=0, to=100, variable=self.states.volume, length=int(btnsize), command=self.adjust_volume),
+            optbar_progress = ttk.Scale(self.frames.progress, from_=0, to=100, variable=self.states.progress_pct),
+            label_progress = tk.Label(self.frames.progress, text='00:00')
         )
 
         minsize = Gadget.getGeometry(window, width=360, height=480, output='metadata')
         
+        ttk.Style().theme_use('vista')
         pygame.init()
         pygame.mixer.init()
         pygame.mixer.music.set_volume(self.volume/100)
+        pygame.mixer.music.set_endevent(eventID.music_end)
         self.states.volume.set(self.volume)
         self.states.pointer.set(-1)
-        self.states.pointer.trace_add('write', self.pointer_moved)
         self.window.title('Simple Music Player')
         self.window.iconbitmap('mediaplayer.ico')
         self.window.geometry(Gadget.getGeometry(window, width=540, height=720))
@@ -221,7 +231,6 @@ class MusicPlayer:
         self.window.columnconfigure(0, weight=1)
         self.window.rowconfigure(1, weight=1)
         self.window.option_add('*font', font.default)
-        self.window.wm_attributes('-topmost', True)
         self.window.wm_attributes('-transparentcolor', color.transparent)
 
         self.frames.file.add_command(label='Import', command=self.add_song)
@@ -231,8 +240,14 @@ class MusicPlayer:
             .__init_appearance__()\
             .__init_behavior__()
         
-        self.monitor = Thread(target=self.song_endevent, daemon=True)
-        self.monitor.start()
+        @dataclass
+        class monitor:
+            event_handler: Thread = Thread(target=self.event_handler, daemon=True, name='event_handler')
+            progress_bar: Thread = Thread(target=self.progbar_track, daemon=True, name='progbar_track')
+        
+        self.monitor = monitor()
+        self.monitor.event_handler.start()
+        self.monitor.progress_bar.start()
         
     def __init_position__(self):
         self.frames.volume.anchor(tk.CENTER)
@@ -240,7 +255,8 @@ class MusicPlayer:
 
         self.frames.label.grid(sticky=tk.NSEW, padx=16, pady=(16, 0))
         self.frames.playlist.grid(sticky=tk.NSEW, padx=16, pady=(0, 8))
-        self.frames.basic.grid(sticky=tk.NSEW, padx=16, pady=(8, 16))
+        self.frames.progress.grid(sticky=tk.NSEW, padx=16, pady=(8, 0))
+        self.frames.basic.grid(sticky=tk.NSEW, padx=16, pady=(0, 16))
 
         self.units.button_shuffle.grid(row=0, column=1)
         self.units.button_repeat.grid(row=0, column=2)
@@ -251,6 +267,10 @@ class MusicPlayer:
         self.frames.volume.grid(row=0, column=7, columnspan=1, sticky=tk.NSEW)
         self.units.button_volume.grid(row=0, column=0)
         self.units.optbar_volume.grid(row=0, column=1)
+
+        self.units.label_progress.grid(row=0, column=0, sticky=tk.NSEW, ipadx=4)
+        self.units.optbar_progress.grid(row=0, column=1, sticky=tk.NSEW)
+        self.frames.progress.columnconfigure(1, weight=1)
 
         tk.Label(self.frames.label, text='Name', anchor=tk.W, width=40).grid(row=0, column=0, padx=(1, 0.5), pady=1, sticky=tk.NSEW)
         tk.Label(self.frames.label, text='Length', anchor=tk.W, width=10).grid(row=0, column=1, padx=(0.5, 1), pady=1, sticky=tk.NSEW)
@@ -291,6 +311,8 @@ class MusicPlayer:
         self.units.button_stop.bind('<Button-1>', self.stop_music)
         self.units.button_prev.bind('<Button-1>', self.prev_song)
         self.units.button_next.bind('<Button-1>', self.next_song)
+        self.units.optbar_progress.bind('<Button-1>', self.progbar_dragged)
+        self.units.optbar_progress.bind('<ButtonRelease-1>', self.progbar_moved)
         self.units.button_play.bind('<Enter>', self.hover_on)
         self.units.button_stop.bind('<Enter>', self.hover_on)
         self.units.button_prev.bind('<Enter>', self.hover_on)
@@ -305,7 +327,7 @@ class MusicPlayer:
         self.units.button_shuffle.bind('<Leave>', self.hover_off)
         self.units.button_repeat.bind('<Leave>', self.hover_off)
         self.units.button_volume.bind('<Leave>', self.hover_off)
-        
+        self.states.pointer.trace_add('write', self.pointer_moved)
         return self
 
     def play_music(self, event=..., status:Literal['playing', 'pause', 'stop'] = ...):
@@ -344,7 +366,7 @@ class MusicPlayer:
             console.info('Successfully added the audio to the playlist!')
             #self.frames.playlist.insert(tk.END, basename(file))  # 將歌曲名稱顯示在Listbox中
     
-    def adjust_volume(self, event):
+    def adjust_volume(self, event=...):
         value = self.states.volume.get()
         pygame.mixer.music.set_volume(value/100) if self.volume.__ne__(value) else ...
         self.volume = value
@@ -374,10 +396,10 @@ class MusicPlayer:
     def hover_on(self, event=...):
         widget: tk.Canvas | tk.Frame = event.widget
         widget.hover = True
-        self.states.hover = self.states.hover(
+        self.states.hover = self.states.hover_prototype(
             widget = widget,
             bgcolor = widget.cget('background'),
-            child = self.states.hover()
+            child = self.states.hover_prototype()
         )
         
         if widget.winfo_name().startswith('playlist-audio'):
@@ -396,19 +418,21 @@ class MusicPlayer:
             widget.config(bg=color.lightgray)
 
     def hover_off(self, event=...):
-        widget: tk.Canvas | tk.Frame = event.widget
-        widget.hover = False
-        if widget.winfo_name().startswith('playlist-audio'):
-            for child in widget.grid_slaves():
-                if not isinstance(child, tk.Label): continue
-                child.config(
-                    fg = self.states.hover.child.fgcolor,
-                    bg = self.states.hover.child.bgcolor,
-                    font = self.states.hover.child.font
-                )
+        try:
+            widget: tk.Canvas | tk.Frame = event.widget
+            widget.hover = False
+            if widget.winfo_name().startswith('playlist-audio'):
+                for child in widget.grid_slaves():
+                    if not isinstance(child, tk.Label): continue
+                    child.config(
+                        fg = self.states.hover.child.fgcolor,
+                        bg = self.states.hover.child.bgcolor,
+                        font = self.states.hover.child.font
+                    )
 
-        widget.config(bg=self.states.hover.bgcolor)
-        self.states.hover = self.states.hover.__class__
+            widget.config(bg=self.states.hover.bgcolor) # @IgnoreException
+            self.states.hover = None
+        except AttributeError: ...
 
     def prev_song(self, event=...):
         if self.states.pointer.get() < 0: return
@@ -428,24 +452,77 @@ class MusicPlayer:
         file: AudioFile = self.queue[self.states.pointer.get()]
         file.trigger(cause_pointer_moved=True) if id(self.states.focus) != id(file) else ...
         pygame.mixer.music.unload()
-        console.info(f'unload!')
         pygame.mixer.music.load(file.data.path)
-        console.info(f'loaded {file.data.name}')
-        pygame.mixer.music.set_endevent(MUSIC_END)
+        self.progbar_moved(0)
+        self.states.diff = 0
+        console.info(f'loaded - {file.data.name}')
 
-    def song_endevent(self):
+    def event_handler(self):
+        while True:
+            if pygame.event.wait().type != eventID.music_end: continue
+
+            pointer = self.states.pointer.get()
+            self.states.status = 'stop'
+            if (pointer + 1) < self.queue.length:
+                self.next_song()
+            else:
+                self.queue[pointer].selected.set(False)
+                self.states.pointer.set(0)
+                self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
+
+    def progbar_sync(self, pct: float, file: AudioFile, reposition: bool = True, label_only: bool = False):
+        """The parameter `pct` must be the value of percentage type
+        in #.* format, rather than the *% one."""
+
+        try:
+            time = pct * file.data.length
+            if not label_only:
+                pygame.mixer.music.set_pos(time) if reposition else ... # @IgnoreException
+                self.states.progress_pct.set(pct * 100)
+            self.units.label_progress.config(text=Gadget.timeformat(time))
+        
+        except pygame.error: ...
+
+        else:
+            return time - (pygame.mixer.music.get_pos() / 1000)
+        
+        return 0
+
+    def progbar_moved(self, event):
+        self.states.isdragging = False
+        try:
+            self.states.diff = self.progbar_sync(
+                pct = Gadget.round(self.states.progress_pct.get() / 100, '.0000'),
+                file = self.queue[self.states.pointer.get()], # @IgnoreException
+                reposition = True
+            )
+
+        except IndexError: ...
+
+    def progbar_dragged(self, event):
+        self.states.isdragging = True
+
+    def progbar_track(self):
+
         while True:
             sleep(.1)
-            for event in pygame.event.get(eventtype=MUSIC_END):
-                pointer = self.states.pointer.get()
-                if (pointer + 1) < self.queue.length:
-                    self.next_song()
-                else:
-                    self.queue[pointer].selected.set(False)
-                    self.states.status = 'stop'
-                    self.states.pointer.set(0)
-                    self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
-        
+            while pygame.mixer.music.get_busy():
+
+                try:
+                    file: AudioFile = self.queue[self.states.pointer.get()]  # @IgnoreException
+                    pos = pygame.mixer.music.get_pos() / 1000 + self.states.diff
+                    pct = Gadget.round(pos / file.data.length, '.0000') # @IgnoreException
+                    self.progbar_sync(
+                        pct = pct,
+                        file = file,
+                        reposition = False,
+                        label_only = True if self.states.isdragging else False
+                    )
+                    sleep(.01)
+
+                except (IndexError, pygame.error):
+                    ...
+
 class audio: ...
 
 audio: MusicPlayer = MusicPlayer(tk.Tk())  # 創建音樂播放器物件
