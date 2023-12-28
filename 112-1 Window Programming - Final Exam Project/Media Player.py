@@ -173,7 +173,8 @@ class MusicPlayer:
             button_stop: tk.PhotoImage = tk.PhotoImage(file='./images/button_stop 128x.png').subsample(4)
             button_repeat: tuple[tk.PhotoImage, ...] = (
                 tk.PhotoImage(file='./images/button_repeat.png').subsample(4),
-                tk.PhotoImage(file='./images/button_repeat_glow.png').subsample(4)
+                tk.PhotoImage(file='./images/button_repeat_glow.png').subsample(4),
+                tk.PhotoImage(file='./images/button_repeat_hyperglow.png').subsample(4),
             )
             button_shuffle: tuple[tk.PhotoImage, ...] = (
                 tk.PhotoImage(file='./images/button_shuffle.png').subsample(4),
@@ -195,7 +196,7 @@ class MusicPlayer:
             hover_prototype: hover_info = hover_info
             isdragging: bool = False
             repeat: bool = False
-            random: bool = False
+            random: Literal[0, 1, 2] = 0
             
             pointer: tk.IntVar = field(default_factory=tk.IntVar)
             volume: tk.IntVar = field(default_factory=tk.IntVar)
@@ -451,15 +452,15 @@ class MusicPlayer:
     def prev_song(self, event=...):
         pointer = self.states.pointer.get()
         if pointer < 0: return
-        if self.states.repeat:
-            self.states.pointer.set(pointer)
-        elif self.states.random:
+
+        if self.states.random:
             self.states.pointer.set(
                 *sample(
                     array(range(self.queue.length)).filter(lambda _: _.__ne__(pointer)),
                     k = 1
                 )
             )
+
         else:
             pointer -= 1
             pointer = (pointer + self.queue.length) if pointer < 0 else pointer
@@ -470,10 +471,8 @@ class MusicPlayer:
     def next_song(self, event=...):
         pointer = self.states.pointer.get()
         if pointer < 0: return
-        if self.states.repeat:
-            self.states.pointer.set(pointer)
 
-        elif self.states.random:
+        if self.states.random:
             self.states.pointer.set(
                 *sample(
                     array(range(self.queue.length)).filter(lambda _: _.__ne__(pointer)),
@@ -503,13 +502,23 @@ class MusicPlayer:
 
             pointer = self.states.pointer.get()
             self.states.status = 'stop'
-            if (pointer + 1) < self.queue.length:
-                self.next_song()
-            else:
-                self.queue[pointer].selected.set(False)
-                self.states.pointer.set(0)
-                self.units.button_play.itemconfig(self.cfgIDs.button_play, image=self.images.button_play)
-
+            match self.states.repeat:
+                case 1:
+                    pygame.mixer.music.rewind()
+                    self.play_music(status='stop')
+                case 0 | 2 if ((pointer + 1) < self.queue.length) or self.states.random:
+                    self.next_song()
+                case 2:
+                    self.states.pointer.set(0)
+                    self.play_music(status='stop')
+                case 0:
+                    self.queue[pointer].selected.set(False)
+                    self.states.pointer.set(0)
+                    self.units.button_play.itemconfig(
+                        tagOrId = self.cfgIDs.button_play,
+                        image = self.images.button_play
+                    )
+                    
     # progess bar
 
     def progbar_sync(self, pct: float, file: AudioFile, reposition: bool = True, label_only: bool = False):
@@ -568,7 +577,7 @@ class MusicPlayer:
             case 'isdragging':
                 self.states.isdragging = False if self.states.isdragging else True
             case 'repeat':
-                self.states.repeat = False if self.states.repeat else True
+                self.states.repeat += 1 if self.states.repeat < 2 else -2
                 self.units.button_repeat.itemconfig(
                     tagOrId = self.cfgIDs.button_repeat,
                     image = self.images.button_repeat[int(self.states.repeat)]
