@@ -39,10 +39,6 @@ class DynamicScrollbar(tk.Scrollbar):
 
     def set(self, first: float | str, last: float | str):
         self.master: tk.Text
-        console.info(self.winfo_vrootwidth())
-        console.info(self.winfo_vrootheight())
-        console.info(self.winfo_width())
-        console.info(self.winfo_height())
         super().set(first, last)
 
 class AudioFile:
@@ -144,20 +140,20 @@ class AudioFile:
         
 class MusicPlayer:
 
-    def __init__(self, window:tk.Tk):
+    def __new__(cls, *args, **kwargs):
 
         @dataclass
-        class frames: # frameworks
-            menu: tk.Menu = tk.Menu(window)
-            label: tk.Frame = tk.Frame(window, bg=color.white)
-            playlist: tk.Frame = tk.Frame(window, bg=color.white)
-            progress: tk.Frame = tk.Frame(window)
-            basic: tk.Frame = tk.Frame(window)
-            volume: tk.Frame = None # child of frames.basic
-            file: tk.Menu = None # child of frams.menu
+        class __frames__: # frameworks
+            menu: tk.Menu = None
+            menu_file: tk.Menu = None # child of frames.menu
+            label: tk.Frame = None
+            playlist: tk.Canvas = None
+            progress: tk.Frame = None
+            basic: tk.Frame = None
+            basic_volume: tk.Frame = None # child of frames.basic
 
         @dataclass
-        class units:
+        class __units__:
             button_play: tk.Canvas
             button_stop: tk.Canvas
             button_prev: tk.Canvas
@@ -168,14 +164,23 @@ class MusicPlayer:
             optbar_volume: ttk.Scale
             optbar_progress: ttk.Scale
             label_progress: tk.Label
-        
+            scroll_bar: DynamicScrollbar
+
         @dataclass
-        class hover_info:
+        class __hover__:
             widget: tk.Widget = None
             fgcolor: object = None
             bgcolor: object = None
             font: object = None
-            child: hover_info = None
+            child: __hover__ = None
+
+        cls.frames = __frames__
+        cls.units = __units__
+        cls.hover = __hover__
+
+        return super().__new__(cls)
+
+    def __init__(self, window:tk.Tk):
 
         @dataclass
         class images:
@@ -205,8 +210,7 @@ class MusicPlayer:
             serial: int = 0
             diff: float = 0
             selected: AudioFile = None
-            hover: hover_info = None
-            hover_prototype: hover_info = hover_info
+            hover: __class__.hover = None
             isdragging: bool = False
             repeat: bool = False
             random: Literal[0, 1, 2] = 0
@@ -222,20 +226,27 @@ class MusicPlayer:
         self.queue = array()
         self.states = states()
         self.images = images()
-        self.frames = frames()
-        self.frames.volume = tk.Frame(self.frames.basic)
-        self.frames.file = tk.Menu(self.frames.menu, tearoff=False)
-        self.units = units(
+        self.frames = self.frames(
+            menu = tk.Menu(window),
+            label = tk.Frame(window, bg=color.white),
+            playlist = tk.Canvas(window, bg=color.white ,bd=0, highlightthickness=0),
+            progress = tk.Frame(window),
+            basic = tk.Frame(window)
+        )
+        self.frames.basic_volume = tk.Frame(self.frames.basic)
+        self.frames.menu_file = tk.Menu(self.frames.menu, tearoff=False)
+        self.units = self.units(
             button_play = tk.Canvas(self.frames.basic, width=int(btnsize), height=int(btnsize)),
             button_prev = tk.Canvas(self.frames.basic, width=int(btnsize*0.75), height=int(btnsize*0.75)),
             button_next = tk.Canvas(self.frames.basic, width=int(btnsize*0.75), height=int(btnsize*0.75)),
             button_stop = tk.Canvas(self.frames.basic, width=int(btnsize*0.5), height=int(btnsize*0.5)),
             button_repeat = tk.Canvas(self.frames.basic, width=int(btnsize*0.5), height=int(btnsize*0.5)),
             button_shuffle = tk.Canvas(self.frames.basic, width=int(btnsize*0.5), height=int(btnsize*0.5)),
-            button_volume = tk.Canvas(self.frames.volume, width=int(btnsize*0.5), height=int(btnsize*0.5)),
-            optbar_volume = ttk.Scale(self.frames.volume, from_=0, to=100, variable=self.states.volume, length=int(btnsize), command=self.adjust_volume),
+            button_volume = tk.Canvas(self.frames.basic_volume, width=int(btnsize*0.5), height=int(btnsize*0.5)),
+            optbar_volume = ttk.Scale(self.frames.basic_volume, from_=0, to=100, variable=self.states.volume, length=int(btnsize), command=self.adjust_volume),
             optbar_progress = ttk.Scale(self.frames.progress, from_=0, to=100, variable=self.states.progress_pct),
-            label_progress = tk.Label(self.frames.progress, text='00:00')
+            label_progress = tk.Label(self.frames.progress, text='00:00'),
+            scroll_bar = DynamicScrollbar(self.frames.playlist, command=self.frames.playlist.yview)
         )
 
         minsize = Gadget.getGeometry(window, width=360, height=480, output='metadata')
@@ -257,12 +268,15 @@ class MusicPlayer:
         self.window.option_add('*font', font.default)
         self.window.wm_attributes('-transparentcolor', color.transparent)
 
-        self.frames.file.add_command(label='Import', command=self.add_song)
-        self.frames.menu.add_cascade(label='File', menu=self.frames.file)
+        self.frames.menu_file.add_command(label='Import', command=self.add_song)
+        self.frames.menu.add_cascade(label='File', menu=self.frames.menu_file)
                 
         self.__init_position__()\
             .__init_appearance__()\
             .__init_behavior__()
+        
+        self.window.update()
+        self.frames.playlist.config(yscrollcommand=self.units.scroll_bar.set, scrollregion=self.frames.playlist.bbox(tk.ALL))
         
         @dataclass
         class monitor:
@@ -274,7 +288,7 @@ class MusicPlayer:
         self.monitor.progress_bar.start()
         
     def __init_position__(self):
-        self.frames.volume.anchor(tk.CENTER)
+        self.frames.basic_volume.anchor(tk.CENTER)
         self.frames.basic.anchor(tk.CENTER)
 
         self.frames.label.grid(sticky=tk.NSEW, padx=16, pady=(16, 0))
@@ -288,13 +302,15 @@ class MusicPlayer:
         self.units.button_prev.grid(row=0, column=4)
         self.units.button_play.grid(row=0, column=5)
         self.units.button_next.grid(row=0, column=6)
-        self.frames.volume.grid(row=0, column=7, columnspan=1, sticky=tk.NSEW)
+        self.frames.basic_volume.grid(row=0, column=7, columnspan=1, sticky=tk.NSEW)
         self.units.button_volume.grid(row=0, column=0)
         self.units.optbar_volume.grid(row=0, column=1)
 
         self.units.label_progress.grid(row=0, column=0, sticky=tk.NSEW, ipadx=4)
         self.units.optbar_progress.grid(row=0, column=1, sticky=tk.NSEW)
         self.frames.progress.columnconfigure(1, weight=1)
+
+        self.units.scroll_bar.place(relx=1, rely=0, relheight=1, anchor=tk.NE)
 
         tk.Label(self.frames.label, text='Name', anchor=tk.W, width=40).grid(row=0, column=0, padx=(1, 0.5), pady=1, sticky=tk.NSEW)
         tk.Label(self.frames.label, text='Length', anchor=tk.W, width=10).grid(row=0, column=1, padx=(0.5, 1), pady=1, sticky=tk.NSEW)
@@ -388,7 +404,7 @@ class MusicPlayer:
         for file in filedialog.askopenfilenames(filetypes=(("MP3 files", "*.mp3"), ("All files", "*.*"))):  # 如果有選擇歌曲
             file = AudioFile(self, self.frames.playlist, path=file)
             self.queue.append(file)  # 將歌曲加入歌曲清單
-            file.frame.grid(sticky=tk.NSEW)
+            self.frames.playlist.create_window((0, 10), anchor=tk.NW, window=file.frame)
             console.info('Successfully added the audio to the playlist!')
     
     def adjust_volume(self, event=...):
