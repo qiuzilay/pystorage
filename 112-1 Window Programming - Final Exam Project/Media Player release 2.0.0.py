@@ -36,16 +36,20 @@ class DynamicScrollbar(ttk.Scrollbar):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.parent = self.master
+        self.parent: tk.Frame = self.master
         self.display = True
 
     def set(self, first: float | str, last: float | str):
-        if first == 0 and last == 1:
-            self.place_forget() if self.display else ...
-            self.display = False
+        if float(first) == 0.0 and float(last) == 1.0:
+            if self.display:
+                self.grid_remove()
+                self.parent.grid(padx = (16, 16))
+                self.display = False
         else:
-            self.place(relx=1.01, rely=0, relheight=1, anchor=tk.NE) if not self.display else ...
-            self.display = True
+            if not self.display:
+                self.parent.grid(padx = (16, 0))
+                self.grid()
+                self.display = True
 
         super().set(first, last)
 
@@ -147,8 +151,10 @@ class MusicPlayer:
         class __frames__: # frameworks
             menu: tk.Menu = None
             menu_file: tk.Menu = None # child of frames.menu
-            label: tk.Frame = None
-            playlist: tk.Canvas = None
+            playlist: tk.Frame = None
+            playlist_label: tk.Frame = None
+            playlist_canvas: tk.Canvas = None
+            playlist_frame: tk.Frame = None
             progress: tk.Frame = None
             basic: tk.Frame = None
             basic_volume: tk.Frame = None # child of frames.basic
@@ -215,6 +221,18 @@ class MusicPlayer:
             pointer: tk.IntVar = field(default_factory=tk.IntVar)
             volume: tk.IntVar = field(default_factory=tk.IntVar)
             progress_pct: tk.DoubleVar = field(default_factory=tk.DoubleVar)
+            playlist_label_width: int = None
+
+        @dataclass
+        class __cfgIDs__:
+            button_play: int = None
+            button_stop: int = None
+            button_prev: int = None
+            button_next: int = None
+            button_shuffle: int = None
+            button_repeat: int = None
+            button_volume: int = None
+            playlist_frame: int = None
 
         cls.frames = __frames__
         cls.units = __units__
@@ -222,6 +240,7 @@ class MusicPlayer:
         cls.hover = __hover__
         cls.monitor = __monitor__
         cls.states = __states__
+        cls.cfgIDs = __cfgIDs__
 
         return super().__new__(cls)
 
@@ -232,17 +251,20 @@ class MusicPlayer:
         self.window = window
         self.volume = 100
         self.queue = array()
+        self.cfgIDs = self.cfgIDs()
         self.states = self.states()
         self.images = self.images()
         self.frames = self.frames(
             menu = tk.Menu(window),
-            label = tk.Frame(window, bg=color.white),
-            playlist = tk.Canvas(window, bg=color.white ,bd=0, highlightthickness=0),
+            playlist = tk.Frame(window),
             progress = tk.Frame(window),
             basic = tk.Frame(window)
         )
-        self.frames.basic_volume = tk.Frame(self.frames.basic)
         self.frames.menu_file = tk.Menu(self.frames.menu, tearoff=False)
+        self.frames.playlist_label = tk.Frame(self.frames.playlist, bg=color.white)
+        self.frames.playlist_canvas = tk.Canvas(self.frames.playlist, bg=color.white, bd=0, highlightthickness=0)
+        self.frames.playlist_frame = tk.Frame(self.frames.playlist_canvas, bg=color.white)
+        self.frames.basic_volume = tk.Frame(self.frames.basic)
         self.units = self.units(
             button_play = tk.Canvas(self.frames.basic, width=int(btnsize), height=int(btnsize)),
             button_prev = tk.Canvas(self.frames.basic, width=int(btnsize*0.75), height=int(btnsize*0.75)),
@@ -254,7 +276,7 @@ class MusicPlayer:
             optbar_volume = ttk.Scale(self.frames.basic_volume, from_=0, to=100, variable=self.states.volume, length=int(btnsize), command=self.adjust_volume),
             optbar_progress = ttk.Scale(self.frames.progress, from_=0, to=100, variable=self.states.progress_pct),
             label_progress = tk.Label(self.frames.progress, text='00:00'),
-            scroll_bar = DynamicScrollbar(self.frames.playlist, command=self.frames.playlist.yview, style='arrowless.Vertical.TScrollbar')
+            scroll_bar = DynamicScrollbar(self.frames.playlist, command=self.frames.playlist_canvas.yview, style='arrowless.Vertical.TScrollbar')
         )
 
         minsize = Gadget.getGeometry(window, width=360, height=480, output='metadata')
@@ -270,6 +292,7 @@ class MusicPlayer:
                 }
             )]
         )
+        style.configure("arrowless.Vertical.TScrollbar", background="green", bordercolor="red")
         pygame.init()
         pygame.mixer.init()
         pygame.mixer.music.set_volume(self.volume/100)
@@ -281,8 +304,6 @@ class MusicPlayer:
         self.window.geometry(Gadget.getGeometry(window, width=540, height=720))
         self.window.minsize(width=minsize.width, height=minsize.height)
         self.window.config(menu=self.frames.menu)
-        self.window.columnconfigure(0, weight=1)
-        self.window.rowconfigure(1, weight=1)
         self.window.option_add('*font', font.default)
         self.window.wm_attributes('-transparentcolor', color.transparent)
 
@@ -293,8 +314,7 @@ class MusicPlayer:
             .__init_appearance__()\
             .__init_behavior__()
         
-        self.window.update_idletasks()
-        self.frames.playlist.config(yscrollcommand=self.units.scroll_bar.set, scrollregion=self.frames.playlist.bbox(tk.ALL))
+        self.frames.playlist_canvas.config(yscrollcommand=self.units.scroll_bar.set, scrollregion=self.frames.playlist_canvas.bbox(tk.ALL))
         
         self.monitor = self.monitor(
             event_handler = Thread(target=self.event_handler, daemon=True, name='event_handler'),
@@ -304,13 +324,23 @@ class MusicPlayer:
         self.monitor.progress_bar.start()
         
     def __init_position__(self):
+
         self.frames.basic_volume.anchor(tk.CENTER)
         self.frames.basic.anchor(tk.CENTER)
 
-        self.frames.label.grid(sticky=tk.NSEW, padx=16, pady=(16, 0))
-        self.frames.playlist.grid(sticky=tk.NSEW, padx=16, pady=(0, 4))
-        self.frames.progress.grid(sticky=tk.NSEW, padx=16, pady=(8, 0))
-        self.frames.basic.grid(sticky=tk.NSEW, padx=16, pady=(0, 16))
+        self.frames.playlist.grid(sticky=tk.NSEW, padx=(24, 0), pady=(16, 8))
+        self.frames.progress.grid(sticky=tk.NSEW, padx=24, pady=(8, 0))
+        self.frames.basic.grid(sticky=tk.NSEW, padx=24, pady=(0, 16))
+        self.window.grid_columnconfigure(0, weight=1)
+        self.window.grid_rowconfigure(0, weight=1)
+
+        self.frames.playlist_label.grid(sticky=tk.NSEW)
+        self.frames.playlist_canvas.grid(sticky=tk.NSEW)
+        self.units.scroll_bar.grid(row=0, column=1, rowspan=2, padx=(0, 7), sticky=tk.NSEW)
+        self.frames.playlist.grid_columnconfigure(0, weight=1)
+        self.frames.playlist.grid_rowconfigure(1, weight=1)
+        self.cfgIDs.playlist_frame = self.frames.playlist_canvas.create_window((0, 0), anchor=tk.NW, window=self.frames.playlist_frame)
+        self.frames.playlist_frame.grid_columnconfigure(0, weight=1)
 
         self.units.button_shuffle.grid(row=0, column=1)
         self.units.button_repeat.grid(row=0, column=2)
@@ -324,44 +354,33 @@ class MusicPlayer:
 
         self.units.label_progress.grid(row=0, column=0, sticky=tk.NSEW, ipadx=4)
         self.units.optbar_progress.grid(row=0, column=1, sticky=tk.NSEW)
-        self.frames.progress.columnconfigure(1, weight=1)
+        self.frames.progress.grid_columnconfigure(1, weight=1)
 
-        self.units.scroll_bar.place(relx=1.01, rely=0, relheight=1, anchor=tk.NE)
+        tk.Label(self.frames.playlist_label, text='Name', anchor=tk.W, width=40).grid(row=0, column=0, padx=(1, 0.5), pady=1, sticky=tk.NSEW)
+        tk.Label(self.frames.playlist_label, text='Length', anchor=tk.W, width=10).grid(row=0, column=1, padx=(0.5, 1), pady=1, sticky=tk.NSEW)
+        self.frames.playlist_label.grid_columnconfigure(0, weight=4)
+        self.frames.playlist_label.grid_columnconfigure(1, weight=1)
 
-        tk.Label(self.frames.label, text='Name', anchor=tk.W, width=40).grid(row=0, column=0, padx=(1, 0.5), pady=1, sticky=tk.NSEW)
-        tk.Label(self.frames.label, text='Length', anchor=tk.W, width=10).grid(row=0, column=1, padx=(0.5, 1), pady=1, sticky=tk.NSEW)
-        self.frames.label.columnconfigure(0, weight=4)
-        self.frames.label.columnconfigure(1, weight=1)
-        self.frames.playlist.columnconfigure(0, weight=1)
+        self.window.update_idletasks()
 
         return self
 
     def __init_appearance__(self):
-
-        @dataclass
-        class cfgIDs:
-            button_play: int
-            button_stop: int
-            button_prev: int
-            button_next: int
-            button_shuffle: int
-            button_repeat: int
-            button_volume: int
         
         self.frames.basic.update()
-        self.cfgIDs = cfgIDs(
-            button_play = self.units.button_play.create_image(self.units.button_play.winfo_width()/2, self.units.button_play.winfo_height()/2, image=self.images.button_play),
-            button_stop = self.units.button_stop.create_image(self.units.button_stop.winfo_width()/2, self.units.button_stop.winfo_height()/2, image=self.images.button_stop),
-            button_prev = self.units.button_prev.create_image(self.units.button_prev.winfo_width()/2, self.units.button_prev.winfo_height()/2, image=self.images.button_prev),
-            button_next = self.units.button_next.create_image(self.units.button_next.winfo_width()/2, self.units.button_next.winfo_height()/2, image=self.images.button_next),
-            button_shuffle = self.units.button_shuffle.create_image(self.units.button_shuffle.winfo_width()/2, self.units.button_shuffle.winfo_height()/2, image=self.images.button_shuffle[0]),
-            button_repeat = self.units.button_repeat.create_image(self.units.button_repeat.winfo_width()/2, self.units.button_repeat.winfo_height()/2, image=self.images.button_repeat[0]),
-            button_volume = self.units.button_volume.create_image(self.units.button_volume.winfo_width()/2, self.units.button_volume.winfo_height()/2, image=self.images.button_volume[2])
-        )
-        
+        self.cfgIDs.button_play = self.units.button_play.create_image(self.units.button_play.winfo_width()/2, self.units.button_play.winfo_height()/2, image=self.images.button_play)
+        self.cfgIDs.button_stop = self.units.button_stop.create_image(self.units.button_stop.winfo_width()/2, self.units.button_stop.winfo_height()/2, image=self.images.button_stop)
+        self.cfgIDs.button_prev = self.units.button_prev.create_image(self.units.button_prev.winfo_width()/2, self.units.button_prev.winfo_height()/2, image=self.images.button_prev)
+        self.cfgIDs.button_next = self.units.button_next.create_image(self.units.button_next.winfo_width()/2, self.units.button_next.winfo_height()/2, image=self.images.button_next)
+        self.cfgIDs.button_shuffle = self.units.button_shuffle.create_image(self.units.button_shuffle.winfo_width()/2, self.units.button_shuffle.winfo_height()/2, image=self.images.button_shuffle[0])
+        self.cfgIDs.button_repeat = self.units.button_repeat.create_image(self.units.button_repeat.winfo_width()/2, self.units.button_repeat.winfo_height()/2, image=self.images.button_repeat[0])
+        self.cfgIDs.button_volume = self.units.button_volume.create_image(self.units.button_volume.winfo_width()/2, self.units.button_volume.winfo_height()/2, image=self.images.button_volume[2])
+
         return self
 
     def __init_behavior__(self):
+
+        self.frames.playlist_label.bind('<Configure>', self.window_resize)
         self.units.button_volume.bind('<Button-1>', self.toggle_muted)
         self.units.button_play.bind('<Button-1>', self.play_music)
         self.units.button_stop.bind('<Button-1>', self.stop_music)
@@ -386,6 +405,7 @@ class MusicPlayer:
         self.units.button_repeat.bind('<Leave>', self.hover_off)
         self.units.button_volume.bind('<Leave>', self.hover_off)
         self.states.pointer.trace_add('write', self.pointer_moved)
+
         return self
 
     def play_music(self, event=..., status: Literal['playing', 'pause', 'stop'] = ...):
@@ -417,16 +437,19 @@ class MusicPlayer:
         self.states.status = 'stop'
         
     def add_song(self):
+
         for file in filedialog.askopenfilenames(filetypes=(("MP3 files", "*.mp3"), ("All files", "*.*"))):  # 如果有選擇歌曲
-            file = AudioFile(self, self.frames.playlist, path=file)
-            _ = self.frames.playlist.create_window((0, 0), anchor=tk.NW, window=file.frame)
-            self.frames.playlist.update_idletasks()
-            self.frames.playlist.move(_, 0, file.id * file.frame.winfo_height())
+            file = AudioFile(self, self.frames.playlist_frame, path=file)
+            file.frame.grid(sticky=tk.NSEW)
             self.queue.append(file)  # 將歌曲加入歌曲清單
             console.info('Successfully added the audio to the playlist!')
-
-        self.units.scroll_bar.lift()
-        self.frames.playlist.config(scrollregion=self.frames.playlist.bbox(tk.ALL))
+            
+        self.frames.playlist_canvas.itemconfig(
+            tagOrId = self.cfgIDs.playlist_frame,
+            width = self.frames.playlist_canvas.winfo_width()
+        )
+        self.frames.playlist.update_idletasks()
+        self.frames.playlist_canvas.config(scrollregion=self.frames.playlist_canvas.bbox(tk.ALL))
     
     def adjust_volume(self, event=...):
         value = self.states.volume.get()
@@ -546,7 +569,7 @@ class MusicPlayer:
         pygame.mixer.music.load(file.data.path)
         self.progbar_sync(0, file)
         self.states.diff = 0
-        console.info(f'loaded - {file.data.name}')
+        console.info(f'loaded - [{Gadget.timeformat(file.data.length)}] {file.data.name}')
 
     def event_handler(self):
         while True:
@@ -643,6 +666,19 @@ class MusicPlayer:
                 )
             case _:
                 raise Exception('An unknown attribute was given')
+
+    def window_resize(self, event):
+        try:
+            assert event.widget is self.frames.playlist_label # @IgnoreException
+            assert event.width != self.states.playlist_label_width
+            self.states.playlist_label_width = event.width
+            self.frames.playlist_frame.config(width=event.width)
+            self.frames.playlist_canvas.itemconfig(
+                tagOrId = self.cfgIDs.playlist_frame,
+                width = event.width
+            )
+        
+        except AssertionError: ...
 
 class audio: ...
 audio: MusicPlayer = MusicPlayer(tk.Tk())  # 創建音樂播放器物件
