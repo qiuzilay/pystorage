@@ -216,8 +216,8 @@ class MusicPlayer:
             selected: AudioFile = None
             hover: __hover__ = None
             isdragging: bool = False
-            repeat: bool = False
-            random: Literal[0, 1, 2] = 0
+            repeat: Literal[0, 1, 2] = 0
+            random: bool = False
             pointer: tk.IntVar = field(default_factory=tk.IntVar)
             volume: tk.IntVar = field(default_factory=tk.IntVar)
             progress_pct: tk.DoubleVar = field(default_factory=tk.DoubleVar)
