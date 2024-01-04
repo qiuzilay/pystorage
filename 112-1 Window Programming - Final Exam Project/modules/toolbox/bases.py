@@ -1,3 +1,4 @@
+from typing import Any
 import enum
 class String(str):
     
@@ -29,4 +30,4 @@ class String(str):
         return len(self)
     
 class Enum(enum.Enum):
-    def __get__(self, obj, type): return self.value
+    def __get__(self, object: None, cls: enum.EnumType) -> Any: return self.value
