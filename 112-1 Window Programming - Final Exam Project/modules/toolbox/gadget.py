@@ -25,7 +25,7 @@ cmdl = namedtuple('command_set', ['command', 'value', 'delay'])
 class Gadget:
     
     @staticmethod
-    def multinput(txt:str, sep:str=None, forceFormat=..., autoFormat:bool=True):
+    def multinput(txt:str, sep:str=None, forceFormat:type=..., autoFormat:bool=True):
         txt = txt.split(sep)
         return (
             tuple(map(forceFormat, txt)) if isclass(forceFormat) else tuple(txt)

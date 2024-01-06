@@ -1,6 +1,6 @@
 from __future__ import annotations
 from inspect import signature, isfunction
-from typing import Iterable, Sequence, Callable, NewType, Literal, Self
+from typing import Iterable, Sequence, Callable, NewType, Literal, Self, get_args
 
 class Numeric: ...
 Numeric = NewType('Numeric', [int, float])
@@ -173,7 +173,8 @@ class slider(array):
     
     @cull_behavior.setter
     def cull_behavior(self, value:Literal['ahead', 'back']):
-        self.__cull_behavior = value if value in ('ahead', 'back') else 'ahead'
+        assert value in ('ahead', 'back'), "invalid cull_behavior value."
+        self.__cull_behavior = value
 
     def __push__(self, values:Iterable, orient:Literal['ahead', 'back']='back') -> Self:
         if orient == 'ahead':

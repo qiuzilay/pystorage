@@ -35,7 +35,7 @@ class json(dict):
         return super().__getitem__(key) # @IgnoreException
     
     def __setitem__(self, key:str, value):
-        return super().__setitem__(key, self.__anlys(value))
+        super().__setitem__(key, self.__anlys(value))
     
     def __anlys(self, obj):
 
