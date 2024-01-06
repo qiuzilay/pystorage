@@ -7,7 +7,7 @@ from typing import Iterable, Sequence, Callable, NewType, Literal, Self, Any
 import enum
 
 dirpath = realpath(dirname(__file__)).removeprefix(getcwd()).lstrip(sep).replace(sep, ".")
-relpath = lambda module_name: f'{dirpath}.{module_name}'
+relpath = lambda module_name: f'{dirpath}.{module_name}' if dirpath else module_name
 
 arraylist = import_module(relpath('arraylist'))
 bases = import_module(relpath('bases'))
