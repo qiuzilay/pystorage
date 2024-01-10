@@ -5,12 +5,14 @@ from os.path import dirname, realpath
 chdir(dirname(realpath(__file__))) if not getcwd().endswith(dirname(realpath(__file__))) else ...
 
 from modules.toolbox import array, Enum, Gadget, console
-from functools import partial
+from modules.toolbox.interface import terminal, input
 from dataclasses import dataclass, field
 from typing import Literal
 import matplotlib as plt
 import tkinter.ttk as ttk
 import tkinter as tk
+
+root = terminal.create()
 
 class color(Enum):
     white = '#FFFFFF'
@@ -76,7 +78,7 @@ class Window():
 
     def __init__(self):
 
-        self.root = tk.Tk()
+        self.root = tk.Toplevel(root)
         self.root.title('Loan Calculator')
         self.root.iconbitmap('')
         self.root.geometry(Gadget.getGeometry(self.root, width=960, height=720))
@@ -193,4 +195,3 @@ class Window():
 
 
 window = Window()
-window.root.mainloop()

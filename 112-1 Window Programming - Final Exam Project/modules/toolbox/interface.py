@@ -3,11 +3,12 @@ from os.path import dirname, realpath, join
 from importlib import import_module, reload
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Self, Any
 from threading import Thread
 from queue import Queue
 from time import sleep
 from io import StringIO
+#from multiprocessing import Process
 import subprocess
 import tkinter.ttk as ttk
 import tkinter as tk
@@ -47,7 +48,7 @@ class color(Enum):
     white = '#FFFFFF'
     black = '#000000'
 
-class Outspace(StringIO):
+class StdoutRework(StringIO):
     def __init__(self, widget: tk.Text, *args) -> None:
         super().__init__(*args)
         self.text = widget
@@ -70,21 +71,45 @@ def input(prompt: str = '') -> Any:
 class terminal:
 
     @classmethod
-    def create(cls, daemon: bool = True) -> Thread:
-        thread = Thread(target=cls.__exec__, name=f'{modpath}.interface.terminal' if modpath else 'interface.terminal', daemon=daemon)
-        thread.start()
-        while sys.stdout is sys.__stdout__: ...
-        return thread
+    def create(cls, root: tk.Tk | tk.Widget = None, daemon: bool = False) -> tk.Tk | tk.Toplevel | tk.Frame:
+        try:
+            cls.window.root # @IgnoreException
+            
+        except AttributeError:
+            
+            if not root:
+                thread = Thread(
+                    target = cls.__async__,
+                    name = f'{modpath}.interface.terminal' if modpath else 'interface.terminal',
+                    daemon = daemon
+                )
+                thread.start()
+                while sys.stdout is sys.__stdout__: ...
+                
+            else:
+                cls.__sync__(root)
+                
+        
+        else:
+            raise RuntimeError('only one terminal existing is allowed.') # @IgnoreException
+        
+        finally:
+            return cls.window.root
 
     @classmethod
-    def __exec__(cls):
-        window: terminal = cls()
-        sys.stdout = window.logs
+    def __sync__(cls, root: tk.Tk | tk.Widget | None) -> None:
+        terminal(root)
+        sys.stdout = cls.window.logs
+
+    @classmethod
+    def __async__(cls) -> None:
+        window = terminal()
+        sys.stdout = cls.window.logs
         window.root.mainloop()
         sys.stdout = sys.__stdout__
-        console.info(cls.window.logs.getvalue())
+        sys.stdout.write(window.logs.getvalue())
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> Self:
 
         @dataclass
         class __frames__:
@@ -115,20 +140,25 @@ class terminal:
 
         return cls.window
 
-    def __init__(self) -> None:
-
-        self.root = tk.Tk(className='terminal')
+    def __init__(self, root: tk.Tk | tk.Widget | None = None) -> None:
+        match root:
+            case _ if isinstance(root, tk.Tk):
+                self.root = tk.Toplevel(root)
+            case _ if isinstance(root, tk.Widget):
+                self.root = tk.Frame(root)
+            case _:
+                self.root = tk.Tk(className='terminal')
+                self.root.title('Terminal')
+                self.root.iconbitmap(path.icon)
+                self.root.geometry(Gadget.getGeometry(window=self.root))
+                self.root.option_add('*font', ('Consolas', 10, 'normal'))
+        
         self.states = self.states()
         self.vars = self.vars()
 
-        self.root.title('Terminal')
-        self.root.iconbitmap(path.icon)
-        self.root.geometry(Gadget.getGeometry(window=self.root))
-        self.root.option_add('*font', ('Consolas', 14, 'normal'))
-
         self.__init_buildtree__()
 
-    def __init_buildtree__(self):
+    def __init_buildtree__(self) -> Self:
         
         self.frames = self.frames(
             console = tk.Frame(self.root, bg=color.black, bd=0, highlightthickness=0),
@@ -143,7 +173,7 @@ class terminal:
 
         return self.__init_position__()
 
-    def __init_position__(self):
+    def __init_position__(self) -> Self:
 
         self.frames.console.grid(sticky=tk.NSEW)
         self.frames.entry.grid(sticky=tk.NSEW)
@@ -162,34 +192,30 @@ class terminal:
 
         return self.__init_behaviour__()
     
-    def __init_behaviour__(self):
+    def __init_behaviour__(self) -> Self:
         self.units.entry_input.bind('<Return>', lambda _: self.console_input(self.vars.entry.get()))
 
         return self.__init_adjustment__()
     
-    def __init_adjustment__(self):
+    def __init_adjustment__(self) -> Self:
 
         self.queue = Queue()
-        self.logs = Outspace(widget=self.units.console)
+        self.logs = StdoutRework(widget=self.units.console)
 
         return self
     
-    def console_input(self, *string: str, sep: str = ' ', end: str = '\n'):
+    def console_input(self, *string: str, sep: str = ' ', end: str = '\n') -> str:
 
         string = sep.join(map(str, string)).strip('\n')
         prefix = f'[{datetime.now().strftime("%H:%M:%S")}] '
 
         if self.states.listening:
             if not self.logs.getvalue().endswith('\n') or string:
-                print(prefix + self.vars.prompt.get() + string)
+                print(prefix + self.vars.prompt.get() + string, end=end)
             self.queue.put_nowait(string)
         else:
-            match string:
-                case 'exit()':
-                    self.root.destroy()
-                case _:
-                    subproc = subprocess.Popen(string, shell=True, text=True, cwd=getcwd(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
-                    for line in iter(subproc.stdout.readline, ''):
-                        print('>>> ' + str(line.rstrip()))
+            subproc = subprocess.Popen(string, shell=True, text=True, cwd=getcwd(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
+            for line in iter(subproc.stdout.readline, ''):
+                print('>>> ' + str(line.rstrip()))
         self.vars.entry.set('')
         return string

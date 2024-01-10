@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from collections import namedtuple
 from inspect import isclass
 from typing import Literal
@@ -124,3 +125,29 @@ class Gadget:
                 return f'{hour:0>2d}:{minute:0>2d}:{second:0>2d}' if hour > 0 else f'{minute:0>2d}:{second:0>2d}'
             case 'set':
                 return namedtuple('timeformat', ('hr', 'min', 'sec'))(hr=hour, min=minute, sec=second)
+            
+    @staticmethod
+    def parentheless(string: str, sep: str = ',', avoid: str | tuple[str, str] = ('(', ')'), strip: str = None) -> list:
+        @dataclass
+        class __symbols__:
+            enter: str = None
+            leave: str = None
+            unique: str = None
+            
+        symbols = __symbols__(*avoid) if len(avoid) > 1 else __symbols__(unique=avoid)
+        scopes = list()
+        layer = 0
+        prev = 0
+        for index, char in enumerate(string):
+            match char:
+                case symbols.enter if len(avoid) > 1: layer += 1
+                case symbols.leave if len(avoid) > 1: layer -= 1
+                case symbols.unique if len(avoid) <= 1: layer = int(not layer)
+                case _ if (char in sep) and (layer == 0): scopes.append(slice(prev, index)); prev = index + 1
+        
+        scopes.append(slice(prev, None))
+
+        retval = list()
+        for scope in scopes: retval.append(string[scope].strip(strip))
+        
+        return retval
