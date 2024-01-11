@@ -189,27 +189,27 @@ class terminal:
         
         self.vars = self.vars()
         self.style = ttk.Style(self.root)
-        self.style.theme_use('alt')
-        self.style.layout(
-            'arrowless.Vertical.TScrollbar', 
-            [(
-                'Vertical.Scrollbar.trough', {
-                    'children': [('Vertical.Scrollbar.thumb', {'expand': '1', 'sticky': tk.NSEW})],
-                    'sticky': tk.NS
-                }
-            )]
-        )
-        self.style.layout(
-            'arrowless.Horizontal.TScrollbar', 
-            [(
-                'Horizontal.Scrollbar.trough', {
-                    'children': [('Horizontal.Scrollbar.thumb', {'expand': '1', 'sticky': tk.NSEW})],
-                    'sticky': tk.EW
-                }
-            )]
-        )
-        self.style.configure('arrowless.Vertical.TScrollbar', troughcolor='black')
-        self.style.configure('arrowless.Horizontal.TScrollbar', troughcolor='black')
+        
+        for orient in ('Vertical', 'Horizontal'):
+            self.style.element_create(f'arrowless.{orient}.Scrollbar.trough', 'from', 'alt')
+            self.style.element_create(f'arrowless.{orient}.Scrollbar.thumb', 'from', 'alt')
+            self.style.element_create(f'arrowless.{orient}.Scrollbar.grip', 'from', 'alt')
+            self.style.layout(
+                f'arrowless.{orient}.Scrollbar',
+                [(
+                    f'arrowless.{orient}.Scrollbar.trough', {
+                        'children': [(
+                            f'arrowless.{orient}.Scrollbar.thumb', {
+                                'unit': '1',
+                                'children': [(f'arrowless.{orient}.Scrollbar.grip', {'sticky': ''})],
+                                'sticky': tk.NSEW
+                            }
+                        )],
+                        'sticky': tk.NS if orient.__eq__('Vertical') else tk.EW if orient.__eq__('Horizontal') else tk.NSEW
+                    }
+                )]
+            )
+            self.style.configure(f'arrowless.{orient}.Scrollbar', troughcolor='black')
 
         self.__init_buildtree__()
 
@@ -228,8 +228,8 @@ class terminal:
             entry_prompt = tk.Label(self.frames.entry_inner, fg=color.white, bg=color.black, textvariable=self.vars.prompt, bd=0, highlightthickness=0)
         )
         
-        self.units.vscrollbar = DynamicScrollbar(self.units.console, orient='vertical', style='arrowless.Vertical.TScrollbar')
-        self.units.hscrollbar = DynamicScrollbar(self.units.console, orient='horizontal', style='arrowless.Horizontal.TScrollbar')
+        self.units.vscrollbar = DynamicScrollbar(self.units.console, orient='vertical', style='arrowless.Vertical.Scrollbar')
+        self.units.hscrollbar = DynamicScrollbar(self.units.console, orient='horizontal', style='arrowless.Horizontal.Scrollbar')
 
         return self.__init_position__()
 
