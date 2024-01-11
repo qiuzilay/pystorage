@@ -39,28 +39,37 @@ except ImportError:
 @dataclass
 class path:
     icon: str
+    timestamp: str
 
 path = path(
-    icon = join(dirpath, 'images', 'icon.ico')
+    icon = join(dirpath, 'images', 'icon.ico'),
+    timestamp = join(dirpath, 'images', 'timestamp.png')
 )
 
 class color(Enum):
     white = '#FFFFFF'
+    lightgray = '#D3D3D3'
+    gray = '#808080'
+    dimgray = '#696969'
     black = '#000000'
 
 class DynamicScrollbar(ttk.Scrollbar):
 
-    def __init__(self, master, orient: Literal['vertical', 'horizontal'], *args, **kwargs):
+    def __init__(self, master, orient: Literal['vertical', 'horizontal'], owner: tk.Text = ..., partner: tk.Text = ..., *args, **kwargs):
         super().__init__(master=master, orient=orient, *args, **kwargs)
         self.master: tk.Frame
         self.orient = orient
+        self.owner = owner
+        self.partner = partner
         self.display = True
 
     def set(self, first: float | str, last: float | str):
+        
         if float(first) == 0.0 and float(last) == 1.0:
             if self.display:
                 self.place_forget()
                 self.display = False
+                
         else:
             if not self.display:
                 match self.orient:
@@ -69,18 +78,34 @@ class DynamicScrollbar(ttk.Scrollbar):
                     case 'horizontal':
                         self.place(relx=0, rely=1, relwidth=1, anchor=tk.SW)
                 self.display = True
-
+        
+        
+        self.partner.yview_moveto(self.owner.yview()[0]) if Ellipsis not in (self.owner, self.partner) else ...
         super().set(first, last)
 
 class StdoutRework(StringIO):
-    def __init__(self, widget: tk.Text, *args) -> None:
+    def __init__(self, widget: tk.Text, timestamp: tk.Text, *args) -> None:
         super().__init__(*args)
-        self.text = widget
+        self.widget = widget
+        self.timestamp = timestamp
     
     def write(self, __s: str) -> int:
-        self.text.config(state=tk.NORMAL)
-        self.text.insert(tk.END, __s)
-        self.text.config(state=tk.DISABLED)
+        prefix = f'[{datetime.now().strftime("%H:%M:%S")}]'
+        
+        yview = self.widget.yview()[1]
+        
+        self.widget.config(state=tk.NORMAL)
+        self.timestamp.config(state=tk.NORMAL)
+        
+        self.widget.insert(tk.END, __s)
+        self.timestamp.insert(tk.END, prefix + '\n' * __s.count('\n')) if __s.endswith('\n') else ...
+        
+        self.timestamp.config(state=tk.DISABLED)
+        self.widget.config(state=tk.DISABLED)
+        
+        self.widget.yview_moveto(1) if yview > .975 else ...
+        self.timestamp.yview_moveto(1) if yview > .975 else ...
+        
         return super().write(__s)
 
 def input(prompt: str = '') -> Any:
@@ -134,6 +159,31 @@ class terminal:
         sys.stdout = sys.__stdout__
         sys.stdout.write(window.logs.getvalue())
 
+    @staticmethod
+    def create_rounded_rectangle(canvas: tk.Canvas ,x1: int, y1: int, x2: int, y2: int, radius: int, **kwargs):
+        return canvas.create_polygon([
+            x1+radius, y1,
+            x1+radius, y1,
+            x2-radius, y1,
+            x2-radius, y1,
+            x2, y1,
+            x2, y1+radius,
+            x2, y1+radius,
+            x2, y2-radius,
+            x2, y2-radius,
+            x2, y2,
+            x2-radius, y2,
+            x2-radius, y2,
+            x1+radius, y2,
+            x1+radius, y2,
+            x1, y2,
+            x1, y2-radius,
+            x1, y2-radius,
+            x1, y1+radius,
+            x1, y1+radius,
+            x1, y1
+        ], **kwargs, smooth = True)
+
     @property
     def defaultFont(self):
         return ('Consolas', self.states.font_size, 'normal')
@@ -145,14 +195,17 @@ class terminal:
             console: tk.Frame = None
             entry: tk.Frame = None
             entry_inner: tk.Frame = None
+            timestamp: tk.Frame = None
         
         @dataclass
         class __units__:
             console: tk.Text = None
+            timestamp: tk.Text = None
             entry_input: tk.Entry = None
             entry_prompt: tk.Label = None
             vscrollbar: ttk.Scrollbar = None
             hscrollbar: ttk.Scrollbar = None
+            toggle_ts: tk.Canvas = None
         
         @dataclass
         class __vars__:
@@ -164,11 +217,23 @@ class terminal:
         class __states__:
             listening: bool = False
             font_size: int = 12
+            tsframe: bool = False
+        
+        @dataclass
+        class __images__:
+            toggle_ts: tk.PhotoImage
+            
+        @dataclass
+        class __configID__:
+            image_toggle_ts: int = None
+            polygon_toggle_ts: int = None
         
         cls.frames = __frames__
         cls.units = __units__
         cls.vars = __vars__
+        cls.images = __images__
         cls.states = __states__()
+        cls.configID = __configID__()
         cls.window = super().__new__(cls)
 
         return cls.window
@@ -188,6 +253,7 @@ class terminal:
                 self.root.option_add('*font', self.defaultFont)
         
         self.vars = self.vars()
+        self.images = self.images(toggle_ts=tk.PhotoImage(file=path.timestamp).subsample(8))
         self.style = ttk.Style(self.root)
         
         for orient in ('Vertical', 'Horizontal'):
@@ -217,32 +283,41 @@ class terminal:
         
         self.frames = self.frames(
             console = tk.Frame(self.root, bg=color.black, bd=0, highlightthickness=0),
-            entry = tk.Frame(self.root, bg=color.black, bd=0, highlightthickness=0)
+            entry = tk.Frame(self.root, bg=color.black, bd=0, highlightthickness=0),
+            timestamp = tk.Frame(self.root, bg=color.black, bd=0, highlightthickness=0)
         )
         
-        self.frames.entry_inner = tk.Text(self.frames.entry, fg=color.white, bg=color.black, state=tk.DISABLED)
+        self.frames.entry_inner = tk.Text(self.frames.entry, fg=color.white, bg=color.black, bd=4, state=tk.DISABLED)
 
         self.units = self.units(
-            console = tk.Text(self.frames.console, fg=color.white, bg=color.black, wrap=tk.NONE, state=tk.DISABLED),
+            console = tk.Text(self.frames.console, fg=color.white, bg=color.black, wrap=tk.NONE, bd=4, state=tk.DISABLED, cursor='arrow'),
             entry_input = tk.Entry(self.frames.entry_inner, fg=color.white, bg=color.black, justify=tk.LEFT, textvariable=self.vars.entry, bd=0, highlightthickness=0),
-            entry_prompt = tk.Label(self.frames.entry_inner, fg=color.white, bg=color.black, textvariable=self.vars.prompt, bd=0, highlightthickness=0)
+            entry_prompt = tk.Label(self.frames.entry_inner, fg=color.white, bg=color.black, textvariable=self.vars.prompt, bd=0, highlightthickness=0),
+            timestamp = tk.Text(self.frames.timestamp, width=10, fg=color.white, bg=color.black, wrap=tk.NONE, bd=4, state=tk.DISABLED, cursor='arrow')
         )
         
-        self.units.vscrollbar = DynamicScrollbar(self.units.console, orient='vertical', style='arrowless.Vertical.Scrollbar')
+        self.units.toggle_ts = tk.Canvas(self.frames.timestamp, bg=color.black, bd=0, highlightthickness=0, width=Gadget.scaler(56), height=Gadget.scaler(56), cursor='arrow')
+        self.units.vscrollbar = DynamicScrollbar(self.units.console, owner=self.units.console, partner=self.units.timestamp, orient='vertical', style='arrowless.Vertical.Scrollbar')
         self.units.hscrollbar = DynamicScrollbar(self.units.console, orient='horizontal', style='arrowless.Horizontal.Scrollbar')
 
         return self.__init_position__()
 
     def __init_position__(self) -> Self:
 
-        self.frames.console.grid(sticky=tk.NSEW)
-        self.frames.entry.grid(sticky=tk.NSEW)
+        self.frames.timestamp.grid(row=0, column=0, sticky=tk.NS)
+        self.frames.console.grid(row=0, column=1, sticky=tk.NSEW)
+        self.frames.entry.grid(row=1, column=0, columnspan=2, sticky=tk.NSEW)
         self.root.grid_rowconfigure(0, weight=1)
-        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(1, weight=1)
 
-        self.units.console.grid(padx=8, pady=(8, 4), sticky=tk.NSEW)
+        self.units.console.grid(padx=(0, 8), pady=(8, 4), sticky=tk.NSEW)
         self.frames.console.grid_rowconfigure(0, weight=1)
         self.frames.console.grid_columnconfigure(0, weight=1)
+        
+        self.units.timestamp.grid(row=0, column=0, padx=(8, 0), pady=(8, 4), sticky=tk.NSEW)
+        self.units.toggle_ts.grid(row=0, column=0, padx=8, pady=8, sticky=tk.N)
+        self.frames.timestamp.grid_rowconfigure(0, weight=1)
+        self.frames.timestamp.grid_columnconfigure(0, weight=1)
         
         self.frames.entry_inner.grid(padx=8, pady=(4, 8), ipadx=4, ipady=8, sticky=tk.NSEW)
         self.frames.entry.grid_rowconfigure(0, weight=1)
@@ -263,28 +338,51 @@ class terminal:
     def __init_behaviour__(self) -> Self:
         self.units.entry_input.bind('<Return>', lambda _: self.console_input(self.vars.entry.get()))
         self.units.console.bind('<Control-MouseWheel>', self.zoom)
+        self.units.toggle_ts.bind('<Button-1>', self.timestamp)
+        self.units.timestamp.bind('<Button-1>', self.timestamp)
 
         return self.__init_adjustment__()
     
     def __init_adjustment__(self) -> Self:
 
         self.queue = Queue()
-        self.logs = StdoutRework(widget=self.units.console)
+        self.logs = StdoutRework(widget=self.units.console, timestamp=self.units.timestamp)
         
-        self.units.vscrollbar.config(command=self.units.console.yview)
+        def yview_bundle(*args, **kwargs):
+            self.units.console.yview(*args, **kwargs)
+            self.units.timestamp.yview(*args, **kwargs)
+        
+        self.units.vscrollbar.config(command=yview_bundle)
         self.units.hscrollbar.config(command=self.units.console.xview)
         self.units.console.config(yscrollcommand=self.units.vscrollbar.set, xscrollcommand=self.units.hscrollbar.set)
+        self.units.timestamp.config(yscrollcommand=self.units.vscrollbar.set)
+        
+        self.units.timestamp.grid_remove()
+        
+        self.configID.polygon_toggle_ts = self.create_rounded_rectangle(
+            self.units.toggle_ts,
+            2, 2, 
+            self.units.toggle_ts.winfo_width()-2, self.units.toggle_ts.winfo_height()-2,
+            radius = 4,
+            outline = color.dimgray,
+            fill = color.black
+        )
+        
+        self.configID.image_toggle_ts = self.units.toggle_ts.create_image(
+            self.units.toggle_ts.winfo_width()/2,
+            self.units.toggle_ts.winfo_height()/2,
+            image = self.images.toggle_ts
+        )
 
         return self
     
     def console_input(self, *string: str, sep: str = ' ', end: str = '\n') -> str:
 
         string: str = sep.join(map(str, string)).strip('\n')
-        prefix: str = f'[{datetime.now().strftime("%H:%M:%S")}] '
 
         if self.states.listening:
             if not self.logs.getvalue().endswith('\n') or string:
-                sys.stdout.write(prefix + self.vars.prompt.get() + string + end)
+                sys.stdout.write(self.vars.prompt.get() + string + end)
             self.queue.put_nowait(string)
         else:
             match string:
@@ -306,6 +404,7 @@ class terminal:
             nonlocal self, event
             self.states.font_size += int(event.delta / 120)
             self.units.console.config(font=self.defaultFont)
+            self.units.timestamp.config(font=self.defaultFont)
                 
             self.prompt = tk.Frame(self.root, bg=color.black, border=0, highlightthickness=0)
             prompt_inner = tk.Label(
@@ -328,4 +427,18 @@ class terminal:
             
         except AssertionError: ...
         except AttributeError: implement()        
-        else: implement()     
+        else: implement()
+
+    def timestamp(self, event: tk.Event) -> None:
+        
+        # expand -> collapse
+        if self.states.tsframe:
+            self.units.timestamp.grid_remove()
+            self.units.toggle_ts.grid()
+            self.states.tsframe = False
+            
+        # collapse -> expand
+        else:
+            self.units.toggle_ts.grid_remove()
+            self.units.timestamp.grid()
+            self.states.tsframe = True
