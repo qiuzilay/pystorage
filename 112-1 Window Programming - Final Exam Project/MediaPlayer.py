@@ -300,7 +300,7 @@ class MusicPlayer:
         self.states.volume.set(self.volume)
         self.states.pointer.set(-1)
         self.window.title('Simple Music Player')
-        self.window.iconbitmap('mediaplayer.ico')
+        self.window.iconbitmap('./images/mediaplayer.ico')
         self.window.geometry(Gadget.getGeometry(window, width=540, height=720))
         self.window.minsize(width=minsize.width, height=minsize.height)
         self.window.config(menu=self.frames.menu)

@@ -413,7 +413,7 @@ window = Tkinter.Tk(className='main')
 keyframe = Tkinter.Frame(window)
 textframe = Tkinter.Frame(window, bg='white')
 entry.textfield = Tkinter.StringVar()
-entry.textfield.trace('w', update)
+entry.textfield.trace_add('write', update)
 textfield = Tkinter.Entry(
     master = textframe,
     bd = 0,

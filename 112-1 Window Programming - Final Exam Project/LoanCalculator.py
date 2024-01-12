@@ -230,6 +230,7 @@ class Window():
         self.units.text_panel.config(state=tk.NORMAL)
         self.units.text_panel.delete('1.0', tk.END)
         self.units.text_panel.config(state=tk.DISABLED)
+        plt.clf()
         if not all: return
         self.units.entry_apr.delete(0, tk.END)
         self.units.entry_year.delete(0, tk.END)
@@ -239,9 +240,9 @@ class Window():
         self.var.scale_apr.set(100)
         self.var.scale_year.set(100)
         self.var.scale_loan.set(100)
+        plt.close()
 
     def calc(self, *args) -> None:
-        plt.clf()
 
         try:
             assert is_number(self.var.entry_apr.get()), 'apr' # @IgnoreException
