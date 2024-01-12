@@ -389,10 +389,14 @@ class terminal:
                 case _ if string.strip('()').startswith(('exit', 'stop', 'end')):
                     self.window.root.destroy()
                 case _:
-                    subproc = subprocess.Popen(string, shell=True, text=True, cwd=getcwd(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
-                    for line in iter(subproc.stdout.readline, ''):
-                        sys.stdout.write('>>> ' + str(line.rstrip()) + '\n')
-                        sys.stdout.flush()
+                    subproc = subprocess.Popen(string, shell=True, text=True, cwd=getcwd(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=1)
+                    sys.stdout.write(f'{realpath(getcwd())}> ' + string + '\n')
+                    stdout, _ = subproc.communicate()
+                    sys.stdout.write(stdout + '\n')
+                    sys.stdout.flush()
+                    # for line in iter(subproc.stdout.readline, ''):
+                    #     sys.stdout.write('>>> ' + str(line.rstrip()) + '\n')
+                    #     sys.stdout.flush()
         self.vars.entry.set('')
         return string
     
