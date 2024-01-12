@@ -1,19 +1,34 @@
-from os import chdir, getcwd
+from os import chdir
 from os.path import dirname, realpath
-from time import sleep
-from sys import modules
 
 chdir(dirname(realpath(__file__)))
 
-from modules.toolbox import array, slider, console
+from modules.toolbox import  console, is_number
 from modules.toolbox.interface import terminal, input
+from dataclasses import dataclass, field
+from typing import Self
 
-terminal.create(daemon=False)
+terminal.create()
 
-get = input('fan is: ')
+class tester:
+    def __new__(cls, *args, **kwargs) -> Self:
+        
+        @dataclass
+        class __vars__:
+            const: list = field(default_factory=list)
+        
+        cls.vars = __vars__()
+        
+        return super().__new__(cls)
 
-console.info(get)
+    def __init__(self, value) -> None:
+        self.vars.const.append(value)
+        
+tester1 = tester('1')
+tester2 = tester('2')
 
-get = input('cat is not: ')
+console.info(tester1.vars.const, id(tester1.vars.const))
+console.info(tester2.vars.const, id(tester2.vars.const))
 
-console.info(get)
+console.info(input('owo: '))
+console.info(input('老師新年快樂: '))
